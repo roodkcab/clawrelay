@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
@@ -37,13 +36,11 @@ class _ChatInputState extends State<ChatInput> {
     super.initState();
     _focusNode.onKeyEvent = (node, event) {
       if (event is! KeyDownEvent) return KeyEventResult.ignored;
-      // Ctrl+V: attempt image paste (async), let text paste through normally
       if (event.logicalKey == LogicalKeyboardKey.keyV &&
           HardwareKeyboard.instance.isControlPressed) {
         _pasteImageFromClipboard();
         return KeyEventResult.ignored;
       }
-      // Enter (without Shift) sends the message
       if (event.logicalKey == LogicalKeyboardKey.enter &&
           !HardwareKeyboard.instance.isShiftPressed) {
         _submit();
@@ -62,7 +59,6 @@ class _ChatInputState extends State<ChatInput> {
     _focusNode.requestFocus();
   }
 
-  /// Try to paste an image from the clipboard using xclip (X11) or wl-paste (Wayland).
   Future<void> _pasteImageFromClipboard() async {
     for (final args in [
       ['xclip', '-selection', 'clipboard', '-t', 'image/png', '-o'],
@@ -88,9 +84,6 @@ class _ChatInputState extends State<ChatInput> {
     }
   }
 
-  /// Interactive screen region capture using native system tools.
-  /// These tools open their own fullscreen selection UI spanning all monitors.
-  /// Returns PNG bytes of the selected region, or null if cancelled/unavailable.
   Future<Uint8List?> _captureScreenRegion() async {
     final path =
         '/tmp/clawrelay_shot_${DateTime.now().millisecondsSinceEpoch}.png';
@@ -111,7 +104,6 @@ class _ChatInputState extends State<ChatInput> {
     }
 
     if (Platform.isLinux) {
-      // flameshot: outputs raw PNG bytes to stdout
       try {
         final p = await Process.start('flameshot', ['gui', '--raw']);
         final chunks = <int>[];
@@ -122,15 +114,11 @@ class _ChatInputState extends State<ChatInput> {
           return Uint8List.fromList(chunks);
         }
       } catch (_) {}
-      // maim -s: interactive rubber-band selection, all monitors
       return await tryFile(['maim', '-s', path]) ??
-          // scrot -s: fallback
           await tryFile(['scrot', '-s', path]);
     } else if (Platform.isMacOS) {
-      // -i: interactive crosshair, works across all displays
       return await tryFile(['screencapture', '-i', path]);
     } else if (Platform.isWindows) {
-      // Windows: capture virtual screen (all monitors) then use Snipping Tool via clipboard
       final winPath = path.replaceAll('/', '\\');
       return await tryFile([
         'powershell',
@@ -150,8 +138,6 @@ class _ChatInputState extends State<ChatInput> {
 
   Future<void> _takeScreenshot() async {
     if (!mounted) return;
-    // Native tools open their own fullscreen selection UI across all monitors.
-    // They return only the selected region — no overlay or cropping needed.
     final bytes = await _captureScreenRegion();
     if (bytes == null || !mounted) return;
     setState(() => _pendingImages.add(
@@ -177,7 +163,8 @@ class _ChatInputState extends State<ChatInput> {
                   ? 'image/webp'
                   : 'image/png';
       if (mounted) {
-        setState(() => _pendingImages.add(ImageAttachment(bytes: bytes, mimeType: mime)));
+        setState(
+            () => _pendingImages.add(ImageAttachment(bytes: bytes, mimeType: mime)));
       }
     }
   }
@@ -192,10 +179,7 @@ class _ChatInputState extends State<ChatInput> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final cardColor = theme.colorScheme.surfaceContainerHighest;
-    final borderColor = _isDragOver
-        ? theme.colorScheme.primary
-        : theme.colorScheme.outlineVariant;
+    final cs = theme.colorScheme;
 
     return DropTarget(
       onDragEntered: (_) => setState(() => _isDragOver = true),
@@ -221,91 +205,60 @@ class _ChatInputState extends State<ChatInput> {
         }
       },
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
+        padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
         child: SafeArea(
           top: false,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             decoration: BoxDecoration(
-              color: _isDragOver
-                  ? theme.colorScheme.primaryContainer.withValues(alpha: 0.18)
-                  : cardColor,
+              color: cs.surfaceContainerLow,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: borderColor,
-                width: _isDragOver ? 1.5 : 0.8,
+                color: _isDragOver
+                    ? cs.primary
+                    : cs.outlineVariant.withValues(alpha: 0.6),
+                width: _isDragOver ? 1.5 : 0.5,
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: cs.shadow.withValues(alpha: 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, -2),
+                ),
+              ],
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // ── Top toolbar row ──────────────────────────────────
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
-                  child: Row(
-                    children: [
-                      // Attach button (flat)
-                      IconButton(
-                        onPressed: widget.enabled ? _pickImageFiles : null,
-                        icon: const Icon(Icons.attach_file),
-                        tooltip: 'Attach image',
-                        iconSize: 20,
-                        style: IconButton.styleFrom(
-                          padding: const EdgeInsets.all(6),
-                          minimumSize: const Size(32, 32),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                      ),
-                      // Screenshot button (flat)
-                      IconButton(
-                        onPressed: widget.enabled ? _takeScreenshot : null,
-                        icon: const Icon(Icons.screenshot_monitor),
-                        tooltip: 'Take screenshot',
-                        iconSize: 20,
-                        style: IconButton.styleFrom(
-                          padding: const EdgeInsets.all(6),
-                          minimumSize: const Size(32, 32),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                      ),
-                      const Spacer(),
-                      // Stop / Send button (flat)
-                      if (widget.isStreaming)
-                        IconButton(
-                          onPressed: widget.onStop,
-                          icon: const Icon(Icons.stop_circle_outlined),
-                          tooltip: 'Stop',
-                          iconSize: 20,
-                          color: theme.colorScheme.error,
-                          style: IconButton.styleFrom(
-                            padding: const EdgeInsets.all(6),
-                            minimumSize: const Size(32, 32),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                        )
-                      else
-                        IconButton(
-                          onPressed: widget.enabled ? _submit : null,
-                          icon: const Icon(Icons.arrow_upward_rounded),
-                          tooltip: 'Send',
-                          iconSize: 20,
-                          style: IconButton.styleFrom(
-                            padding: const EdgeInsets.all(6),
-                            minimumSize: const Size(32, 32),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                        ),
-                    ],
+                // ── Text area ────────────────────────────────────────
+                TextField(
+                  controller: _controller,
+                  focusNode: _focusNode,
+                  maxLines: 8,
+                  minLines: 2,
+                  textInputAction: TextInputAction.newline,
+                  enabled: widget.enabled,
+                  style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
+                  decoration: InputDecoration(
+                    hintText: 'Message Claude...',
+                    hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                      color: cs.onSurfaceVariant.withValues(alpha: 0.4),
+                    ),
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    filled: false,
+                    contentPadding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
                   ),
                 ),
 
                 // ── Image thumbnail strip ─────────────────────────────
                 if (_pendingImages.isNotEmpty)
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
                     child: SizedBox(
-                      height: 64,
+                      height: 60,
                       child: ListView.separated(
                         scrollDirection: Axis.horizontal,
                         itemCount: _pendingImages.length,
@@ -319,28 +272,35 @@ class _ChatInputState extends State<ChatInput> {
                                 borderRadius: BorderRadius.circular(8),
                                 child: Image.memory(
                                   img.bytes,
-                                  width: 52,
-                                  height: 52,
+                                  width: 48,
+                                  height: 48,
                                   fit: BoxFit.cover,
                                 ),
                               ),
                               Positioned(
-                                top: -5,
-                                right: -5,
-                                child: GestureDetector(
-                                  onTap: () => setState(
-                                      () => _pendingImages.removeAt(index)),
-                                  child: Container(
-                                    width: 16,
-                                    height: 16,
-                                    decoration: BoxDecoration(
-                                      color: theme.colorScheme.error,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Icon(
-                                      Icons.close,
-                                      size: 10,
-                                      color: theme.colorScheme.onError,
+                                top: -4,
+                                right: -4,
+                                child: MouseRegion(
+                                  cursor: SystemMouseCursors.click,
+                                  child: GestureDetector(
+                                    onTap: () => setState(
+                                        () => _pendingImages.removeAt(index)),
+                                    child: Container(
+                                      width: 16,
+                                      height: 16,
+                                      decoration: BoxDecoration(
+                                        color: cs.error,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: cs.surfaceContainerLow,
+                                          width: 1.5,
+                                        ),
+                                      ),
+                                      child: Icon(
+                                        Icons.close,
+                                        size: 9,
+                                        color: cs.onError,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -352,25 +312,114 @@ class _ChatInputState extends State<ChatInput> {
                     ),
                   ),
 
-                // ── Text area ────────────────────────────────────────
-                TextField(
-                  controller: _controller,
-                  focusNode: _focusNode,
-                  maxLines: 8,
-                  minLines: 3,
-                  textInputAction: TextInputAction.newline,
-                  enabled: widget.enabled,
-                  style: theme.textTheme.bodyMedium,
-                  decoration: InputDecoration(
-                    hintText: 'Message Claude...',
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    filled: false,
-                    contentPadding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                // ── Bottom toolbar row ────────────────────────────────
+                Container(
+                  padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
+                  child: Row(
+                    children: [
+                      _ToolbarButton(
+                        icon: Icons.attach_file_rounded,
+                        tooltip: 'Attach image',
+                        onPressed: widget.enabled ? _pickImageFiles : null,
+                      ),
+                      _ToolbarButton(
+                        icon: Icons.screenshot_monitor_outlined,
+                        tooltip: 'Take screenshot',
+                        onPressed: widget.enabled ? _takeScreenshot : null,
+                      ),
+                      const Spacer(),
+                      if (widget.isStreaming)
+                        _ActionButton(
+                          icon: Icons.stop_rounded,
+                          tooltip: 'Stop',
+                          onPressed: widget.onStop,
+                          color: cs.error,
+                        )
+                      else
+                        _ActionButton(
+                          icon: Icons.arrow_upward_rounded,
+                          tooltip: 'Send',
+                          onPressed: widget.enabled ? _submit : null,
+                          color: cs.primary,
+                        ),
+                    ],
                   ),
                 ),
               ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ToolbarButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onPressed;
+
+  const _ToolbarButton({
+    required this.icon,
+    required this.tooltip,
+    this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return IconButton(
+      onPressed: onPressed,
+      icon: Icon(icon),
+      tooltip: tooltip,
+      iconSize: 18,
+      color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+      disabledColor: cs.onSurfaceVariant.withValues(alpha: 0.2),
+      style: IconButton.styleFrom(
+        padding: const EdgeInsets.all(8),
+        minimumSize: const Size(34, 34),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+    );
+  }
+}
+
+class _ActionButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onPressed;
+  final Color color;
+
+  const _ActionButton({
+    required this.icon,
+    required this.tooltip,
+    this.onPressed,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isEnabled = onPressed != null;
+    return Tooltip(
+      message: tooltip,
+      child: MouseRegion(
+        cursor: isEnabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+        child: GestureDetector(
+          onTap: onPressed,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: isEnabled ? color : color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Icon(
+              icon,
+              size: 17,
+              color: isEnabled
+                  ? Colors.white
+                  : color.withValues(alpha: 0.3),
             ),
           ),
         ),

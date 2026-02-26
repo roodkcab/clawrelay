@@ -25,7 +25,6 @@ class HomeScreen extends ConsumerWidget {
           selectedId: selectedId,
           onSelect: (project) {
             ref.read(selectedProjectIdProvider.notifier).state = project.id;
-            // Clear unread mark when opening this project
             final unread = ref.read(unreadProjectIdsProvider);
             if (unread.contains(project.id)) {
               ref.read(unreadProjectIdsProvider.notifier).state =
@@ -60,6 +59,8 @@ class HomeScreen extends ConsumerWidget {
           );
         }
 
+        final cs = Theme.of(context).colorScheme;
+
         return AdaptiveLayout(
           sidebar: sidebar,
           detail: isWide ? detail : null,
@@ -67,14 +68,24 @@ class HomeScreen extends ConsumerWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.chat_outlined,
-                    size: 64,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant),
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(
+                    Icons.chat_outlined,
+                    size: 28,
+                    color: cs.onSurfaceVariant.withValues(alpha: 0.5),
+                  ),
+                ),
                 const SizedBox(height: 16),
                 Text(
                   'Select a project to start chatting',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: cs.onSurfaceVariant.withValues(alpha: 0.6),
                       ),
                 ),
               ],
@@ -96,56 +107,103 @@ class _ProjectList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final projectsAsync = ref.watch(projectsStreamProvider);
     final unreadIds = ref.watch(unreadProjectIdsProvider);
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('ClawRelay'),
+        toolbarHeight: 52,
+        title: Row(
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [cs.primary, cs.primary.withValues(alpha: 0.7)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.terminal, size: 15, color: Colors.white),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'ClawRelay',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.3,
+              ),
+            ),
+          ],
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.settings_outlined),
+            icon: Icon(Icons.settings_outlined, size: 20, color: cs.onSurfaceVariant),
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const SettingsScreen()),
             ),
+            style: IconButton.styleFrom(
+              padding: const EdgeInsets.all(8),
+              minimumSize: const Size(36, 36),
+            ),
           ),
+          const SizedBox(width: 4),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.small(
         onPressed: () => Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const ProjectFormScreen()),
         ),
-        child: const Icon(Icons.add),
+        child: const Icon(Icons.add, size: 20),
       ),
       body: projectsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(child: CircularProgressIndicator(strokeWidth: 2)),
         error: (e, _) => Center(child: Text('Error: $e')),
         data: (projects) {
           if (projects.isEmpty) {
             return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.folder_off_outlined,
-                      size: 48,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant),
-                  const SizedBox(height: 12),
-                  Text(
-                    'No projects yet',
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Tap + to create one',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                  ),
-                ],
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerHigh,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(
+                        Icons.folder_off_outlined,
+                        size: 24,
+                        color: cs.onSurfaceVariant.withValues(alpha: 0.5),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'No projects yet',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Tap + to create one',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant.withValues(alpha: 0.5),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             );
           }
           return ListView.builder(
+            padding: const EdgeInsets.only(top: 4, bottom: 80),
             itemCount: projects.length,
             itemBuilder: (context, index) {
               final project = projects[index];
@@ -174,8 +232,7 @@ class _ProjectList extends ConsumerWidget {
                         FilledButton(
                           onPressed: () => Navigator.pop(ctx, true),
                           style: FilledButton.styleFrom(
-                            backgroundColor:
-                                Theme.of(context).colorScheme.error,
+                            backgroundColor: cs.error,
                           ),
                           child: const Text('Delete'),
                         ),

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../database/database.dart';
-import '../models/api_types.dart';
 import '../providers/chat_provider.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/chat_input.dart';
@@ -33,7 +32,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scrollController.hasClients) return;
-      // With reverse: true, offset 0 = bottom of conversation
       _scrollController.jumpTo(0);
     });
   }
@@ -41,8 +39,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     final chatAsync = ref.watch(chatProvider(widget.project.id));
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
 
-    // Scroll to bottom on initial load or when a new message is added
     ref.listen(chatProvider(widget.project.id), (prev, next) {
       if (prev?.isLoading == true && next.hasValue) {
         _scrollToBottom();
@@ -58,11 +57,41 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: widget.showBackButton,
-        title: Text(widget.project.name),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: cs.primary.withValues(alpha: 0.6),
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                widget.project.name,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(0.5),
+          child: Container(
+            height: 0.5,
+            color: cs.outlineVariant.withValues(alpha: 0.5),
+          ),
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.delete_sweep_outlined),
+            icon: Icon(Icons.delete_sweep_outlined, size: 20, color: cs.onSurfaceVariant),
             tooltip: 'Clear history',
+            style: IconButton.styleFrom(
+              padding: const EdgeInsets.all(8),
+              minimumSize: const Size(36, 36),
+            ),
             onPressed: () async {
               final confirm = await showDialog<bool>(
                 context: context,
@@ -89,10 +118,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               }
             },
           ),
+          const SizedBox(width: 4),
         ],
       ),
       body: chatAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(child: CircularProgressIndicator(strokeWidth: 2)),
         error: (e, _) => Center(child: Text('Error: $e')),
         data: (chatState) => Column(
           children: [
@@ -102,44 +132,37 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.chat_bubble_outline,
-                              size: 48,
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant),
+                          Container(
+                            width: 56,
+                            height: 56,
+                            decoration: BoxDecoration(
+                              color: cs.surfaceContainerHigh,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Icon(
+                              Icons.chat_bubble_outline_rounded,
+                              size: 24,
+                              color: cs.onSurfaceVariant.withValues(alpha: 0.4),
+                            ),
+                          ),
                           const SizedBox(height: 12),
                           Text(
                             'Start a conversation',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyLarge
-                                ?.copyWith(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant,
-                                ),
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: cs.onSurfaceVariant.withValues(alpha: 0.5),
+                            ),
                           ),
                         ],
                       ),
                     )
                   : Scrollbar(
                       controller: _scrollController,
-                      thumbVisibility: true,
                       child: SingleChildScrollView(
                         controller: _scrollController,
-                        // reverse: true anchors offset 0 at the BOTTOM.
-                        // New content (streaming bubble) lives at offset 0 and
-                        // is always immediately visible. MarkdownBody settling in
-                        // older messages grows maxScrollExtent upward — the user
-                        // at offset 0 is unaffected and never jumps.
                         reverse: true,
                         padding: const EdgeInsets.symmetric(vertical: 8),
                         child: Column(
                           children: [
-                            // With reverse: true the viewport anchors at the END
-                            // of the column (last child = bottom of screen).
-                            // Keep chronological order so oldest is at top and
-                            // newest/streaming is at the bottom.
                             for (final msg in chatState.messages)
                               MessageBubble(
                                 key: ValueKey(msg.id),
@@ -165,13 +188,30 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             if (chatState.error != null)
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                color: Theme.of(context).colorScheme.errorContainer,
-                child: Text(
-                  chatState.error!,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onErrorContainer,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                margin: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: cs.errorContainer,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: cs.error.withValues(alpha: 0.2),
+                    width: 0.5,
                   ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.error_outline, size: 16, color: cs.onErrorContainer),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        chatState.error!,
+                        style: TextStyle(
+                          color: cs.onErrorContainer,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ChatInput(

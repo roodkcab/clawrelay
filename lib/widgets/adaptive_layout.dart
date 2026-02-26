@@ -24,10 +24,19 @@ class AdaptiveLayout extends StatelessWidget {
           return Row(
             children: [
               SizedBox(
-                width: 320,
-                child: sidebar,
+                width: 300,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    border: Border(
+                      right: BorderSide(
+                        color: Theme.of(context).colorScheme.outlineVariant,
+                        width: 0.5,
+                      ),
+                    ),
+                  ),
+                  child: sidebar,
+                ),
               ),
-              VerticalDivider(width: 1, thickness: 1),
               Expanded(
                 child: detail ?? emptyDetail,
               ),

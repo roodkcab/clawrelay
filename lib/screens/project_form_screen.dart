@@ -31,8 +31,7 @@ class _ProjectFormScreenState extends ConsumerState<ProjectFormScreen> {
     _promptController =
         TextEditingController(text: widget.project?.systemPrompt ?? '');
     _modelController = TextEditingController(
-      text: widget.project?.model ??
-          ref.read(defaultModelProvider),
+      text: widget.project?.model ?? ref.read(defaultModelProvider),
     );
   }
 
@@ -78,46 +77,59 @@ class _ProjectFormScreenState extends ConsumerState<ProjectFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(_isEditing ? 'Edit Project' : 'New Project'),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(0.5),
+          child: Container(
+            height: 0.5,
+            color: cs.outlineVariant.withValues(alpha: 0.5),
+          ),
+        ),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         children: [
           TextField(
             controller: _nameController,
             decoration: const InputDecoration(
               labelText: 'Project Name',
-              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.label_outline, size: 18),
             ),
             autofocus: true,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           TextField(
             controller: _modelController,
             decoration: const InputDecoration(
               labelText: 'Model',
               hintText: 'vllm/claude-sonnet-4-6',
-              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.smart_toy_outlined, size: 18),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           TextField(
             controller: _dirController,
             decoration: const InputDecoration(
               labelText: 'Working Directory (optional)',
               hintText: '/path/to/project',
-              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.folder_outlined, size: 18),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           TextField(
             controller: _promptController,
             decoration: const InputDecoration(
               labelText: 'System Prompt (optional)',
-              border: OutlineInputBorder(),
               alignLabelWithHint: true,
+              prefixIcon: Padding(
+                padding: EdgeInsets.only(bottom: 48),
+                child: Icon(Icons.description_outlined, size: 18),
+              ),
             ),
             maxLines: 5,
             minLines: 3,
@@ -125,7 +137,7 @@ class _ProjectFormScreenState extends ConsumerState<ProjectFormScreen> {
           const SizedBox(height: 24),
           FilledButton.icon(
             onPressed: _save,
-            icon: Icon(_isEditing ? Icons.save : Icons.add),
+            icon: Icon(_isEditing ? Icons.check_rounded : Icons.add, size: 18),
             label: Text(_isEditing ? 'Save' : 'Create'),
           ),
         ],

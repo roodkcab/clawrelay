@@ -1,10 +1,11 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:markdown/markdown.dart' as md;
+
+const _monoFont = 'JetBrains Mono'; // Falls back to system monospace
 
 class MessageBubble extends StatelessWidget {
   final String role;
@@ -27,52 +28,72 @@ class MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final cs = theme.colorScheme;
+
+    final bubbleColor = _isUser
+        ? cs.primary.withValues(alpha: 0.12)
+        : cs.surfaceContainerLow;
+
+    final bubbleBorder = _isUser
+        ? Border.all(color: cs.primary.withValues(alpha: 0.18), width: 0.5)
+        : Border.all(color: cs.outlineVariant.withValues(alpha: 0.5), width: 0.5);
 
     return Align(
       alignment: _isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.8,
+          maxWidth: MediaQuery.of(context).size.width * 0.78,
         ),
-        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        padding: const EdgeInsets.all(12),
+        margin: EdgeInsets.only(
+          left: _isUser ? 48 : 12,
+          right: _isUser ? 12 : 48,
+          top: 3,
+          bottom: 3,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: _isUser
-              ? colorScheme.primaryContainer
-              : colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(16).copyWith(
+          color: bubbleColor,
+          borderRadius: BorderRadius.circular(14).copyWith(
             bottomRight: _isUser ? const Radius.circular(4) : null,
             bottomLeft: !_isUser ? const Radius.circular(4) : null,
           ),
+          border: bubbleBorder,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (!_isUser)
               Padding(
-                padding: const EdgeInsets.only(bottom: 4),
+                padding: const EdgeInsets.only(bottom: 6),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.smart_toy_outlined,
-                        size: 14, color: colorScheme.primary),
-                    const SizedBox(width: 4),
+                    Container(
+                      width: 18,
+                      height: 18,
+                      decoration: BoxDecoration(
+                        color: cs.primary.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                      child: Icon(Icons.auto_awesome, size: 11, color: cs.primary),
+                    ),
+                    const SizedBox(width: 6),
                     Text(
                       'Claude',
                       style: theme.textTheme.labelSmall?.copyWith(
-                        color: colorScheme.primary,
+                        color: cs.primary,
                         fontWeight: FontWeight.w600,
+                        letterSpacing: 0.2,
                       ),
                     ),
                     if (isStreaming) ...[
                       const SizedBox(width: 8),
                       SizedBox(
-                        width: 12,
-                        height: 12,
+                        width: 10,
+                        height: 10,
                         child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: colorScheme.primary,
+                          strokeWidth: 1.5,
+                          color: cs.primary.withValues(alpha: 0.6),
                         ),
                       ),
                     ],
@@ -82,12 +103,13 @@ class MessageBubble extends StatelessWidget {
             if (!_isUser && streamingThinking.isNotEmpty)
               _ThinkingPreview(thinking: streamingThinking),
             if (_isUser)
-              _UserContent(content: content, colorScheme: colorScheme, theme: theme)
+              _UserContent(content: content, colorScheme: cs, theme: theme)
             else if (isStreaming)
               SelectableText(
                 content,
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onSurface,
+                  color: cs.onSurface,
+                  height: 1.5,
                 ),
               )
             else
@@ -95,17 +117,47 @@ class MessageBubble extends StatelessWidget {
                 data: content,
                 selectable: true,
                 styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
-                  code: theme.textTheme.bodySmall?.copyWith(
-                    fontFamily: 'monospace',
-                    backgroundColor: colorScheme.surfaceContainerLow,
+                  p: theme.textTheme.bodyMedium?.copyWith(
+                    color: cs.onSurface,
+                    height: 1.55,
+                  ),
+                  code: TextStyle(fontFamily: _monoFont,
+                    fontSize: 12.5,
+                    color: cs.primary,
+                    backgroundColor: cs.primary.withValues(alpha: 0.08),
                   ),
                   codeblockDecoration: BoxDecoration(
-                    color: colorScheme.surfaceContainerLow,
-                    borderRadius: BorderRadius.circular(8),
+                    color: cs.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: cs.outlineVariant.withValues(alpha: 0.5),
+                      width: 0.5,
+                    ),
+                  ),
+                  blockquoteDecoration: BoxDecoration(
+                    border: Border(
+                      left: BorderSide(color: cs.primary.withValues(alpha: 0.4), width: 3),
+                    ),
+                  ),
+                  blockquotePadding: const EdgeInsets.only(left: 12, top: 4, bottom: 4),
+                  h1: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: cs.onSurface,
+                  ),
+                  h2: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: cs.onSurface,
+                  ),
+                  h3: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: cs.onSurface,
+                  ),
+                  listBullet: theme.textTheme.bodyMedium?.copyWith(
+                    color: cs.onSurfaceVariant,
                   ),
                 ),
                 builders: {
-                  'pre': _CodeBlockBuilder(colorScheme: colorScheme),
+                  'pre': _CodeBlockBuilder(colorScheme: cs, theme: theme),
                 },
               ),
             if (toolCalls.isNotEmpty)
@@ -115,23 +167,31 @@ class MessageBubble extends StatelessWidget {
                   spacing: 6,
                   runSpacing: 4,
                   children: toolCalls.map((name) {
-                    return Chip(
-                      avatar: Icon(Icons.build_outlined,
-                          size: 12, color: colorScheme.onSecondaryContainer),
-                      label: Text(
-                        name,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: colorScheme.onSecondaryContainer,
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerHigh,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: cs.outlineVariant.withValues(alpha: 0.5),
+                          width: 0.5,
                         ),
                       ),
-                      backgroundColor: colorScheme.secondaryContainer,
-                      padding: EdgeInsets.zero,
-                      labelPadding:
-                          const EdgeInsets.symmetric(horizontal: 6),
-                      materialTapTargetSize:
-                          MaterialTapTargetSize.shrinkWrap,
-                      visualDensity: VisualDensity.compact,
-                      side: BorderSide.none,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.build_outlined,
+                              size: 11, color: cs.onSurfaceVariant),
+                          const SizedBox(width: 4),
+                          Text(
+                            name,
+                            style: TextStyle(fontFamily: _monoFont,
+                              fontSize: 11,
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
                     );
                   }).toList(),
                 ),
@@ -157,7 +217,6 @@ class _UserContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Try to parse as a JSON content array (messages with attached images)
     try {
       final decoded = jsonDecode(content);
       if (decoded is List) {
@@ -165,31 +224,34 @@ class _UserContent extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             for (final part in decoded)
-              if ((part as Map)['type'] == 'text' && (part['text'] as String?)?.isNotEmpty == true)
+              if ((part as Map)['type'] == 'text' &&
+                  (part['text'] as String?)?.isNotEmpty == true)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 4),
                   child: SelectableText(
                     part['text'] as String,
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.onPrimaryContainer,
+                      color: colorScheme.onSurface,
+                      height: 1.5,
                     ),
                   ),
                 )
               else if (part['type'] == 'image_url')
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
-                  child: _InlineImage(dataUri: (part['image_url'] as Map)['url'] as String),
+                  child: _InlineImage(
+                      dataUri: (part['image_url'] as Map)['url'] as String),
                 ),
           ],
         );
       }
     } catch (_) {}
 
-    // Plain text fallback
     return SelectableText(
       content,
       style: theme.textTheme.bodyMedium?.copyWith(
-        color: colorScheme.onPrimaryContainer,
+        color: colorScheme.onSurface,
+        height: 1.5,
       ),
     );
   }
@@ -216,7 +278,7 @@ class _InlineImage extends StatelessWidget {
     final bytes = _decodeBytes();
     if (bytes == null) return const SizedBox.shrink();
     return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(10),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 320, maxHeight: 320),
         child: Image.memory(bytes, fit: BoxFit.contain),
@@ -239,23 +301,23 @@ class _ThinkingPreviewState extends State<_ThinkingPreview> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    // Show last ~120 chars as collapsed preview
+    final cs = theme.colorScheme;
     final preview = widget.thinking.length > 120
         ? '...${widget.thinking.substring(widget.thinking.length - 120)}'
         : widget.thinking;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.only(bottom: 8),
       child: GestureDetector(
         onTap: () => setState(() => _expanded = !_expanded),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerLow,
+            color: cs.tertiary.withValues(alpha: 0.06),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: colorScheme.outlineVariant,
+              color: cs.tertiary.withValues(alpha: 0.15),
               width: 0.5,
             ),
           ),
@@ -265,31 +327,52 @@ class _ThinkingPreviewState extends State<_ThinkingPreview> {
               Row(
                 children: [
                   Icon(Icons.psychology_outlined,
-                      size: 12, color: colorScheme.tertiary),
-                  const SizedBox(width: 4),
+                      size: 13, color: cs.tertiary),
+                  const SizedBox(width: 5),
                   Text(
                     'Thinking',
                     style: theme.textTheme.labelSmall?.copyWith(
-                      color: colorScheme.tertiary,
+                      color: cs.tertiary,
                       fontWeight: FontWeight.w600,
+                      fontSize: 11,
                     ),
                   ),
                   const Spacer(),
-                  Icon(
-                    _expanded ? Icons.expand_less : Icons.expand_more,
-                    size: 14,
-                    color: colorScheme.onSurfaceVariant,
+                  AnimatedRotation(
+                    turns: _expanded ? 0.5 : 0.0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Icon(
+                      Icons.expand_more,
+                      size: 14,
+                      color: cs.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ),
               const SizedBox(height: 4),
-              SelectableText(
-                _expanded ? widget.thinking : preview,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                  fontStyle: FontStyle.italic,
-                  height: 1.4,
+              AnimatedCrossFade(
+                firstChild: SelectableText(
+                  preview,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: cs.onSurfaceVariant.withValues(alpha: 0.7),
+                    fontStyle: FontStyle.italic,
+                    height: 1.45,
+                    fontSize: 12,
+                  ),
                 ),
+                secondChild: SelectableText(
+                  widget.thinking,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: cs.onSurfaceVariant.withValues(alpha: 0.7),
+                    fontStyle: FontStyle.italic,
+                    height: 1.45,
+                    fontSize: 12,
+                  ),
+                ),
+                crossFadeState: _expanded
+                    ? CrossFadeState.showSecond
+                    : CrossFadeState.showFirst,
+                duration: const Duration(milliseconds: 200),
               ),
             ],
           ),
@@ -301,8 +384,9 @@ class _ThinkingPreviewState extends State<_ThinkingPreview> {
 
 class _CodeBlockBuilder extends MarkdownElementBuilder {
   final ColorScheme colorScheme;
+  final ThemeData theme;
 
-  _CodeBlockBuilder({required this.colorScheme});
+  _CodeBlockBuilder({required this.colorScheme, required this.theme});
 
   @override
   Widget? visitElementAfterWithContext(
@@ -312,46 +396,94 @@ class _CodeBlockBuilder extends MarkdownElementBuilder {
     TextStyle? parentStyle,
   ) {
     final code = element.textContent;
-    return Stack(
-      children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: SelectableText(
-            code,
-            style: TextStyle(
-              fontFamily: 'monospace',
-              fontSize: 13,
-              color: colorScheme.onSurface,
-            ),
-          ),
+    final cs = colorScheme;
+
+    // Try to extract language from class attribute
+    String? language;
+    if (element.children?.isNotEmpty == true) {
+      final firstChild = element.children!.first;
+      if (firstChild is md.Element && firstChild.attributes.containsKey('class')) {
+        language = firstChild.attributes['class']?.replaceFirst('language-', '');
+      }
+    }
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: 0.5),
+          width: 0.5,
         ),
-        Positioned(
-          top: 4,
-          right: 4,
-          child: IconButton(
-            icon: const Icon(Icons.copy, size: 16),
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: code));
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Copied to clipboard'),
-                  duration: Duration(seconds: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header bar with language label and copy button
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: cs.outlineVariant.withValues(alpha: 0.2),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
+            ),
+            child: Row(
+              children: [
+                if (language != null && language.isNotEmpty)
+                  Text(
+                    language,
+                    style: TextStyle(fontFamily: _monoFont,
+                      fontSize: 11,
+                      color: cs.onSurfaceVariant.withValues(alpha: 0.7),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                const Spacer(),
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: () {
+                      Clipboard.setData(ClipboardData(text: code));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Copied to clipboard'),
+                          duration: Duration(seconds: 1),
+                        ),
+                      );
+                    },
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.copy_rounded, size: 13, color: cs.onSurfaceVariant.withValues(alpha: 0.6)),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Copy',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              );
-            },
-            tooltip: 'Copy',
-            style: IconButton.styleFrom(
-              padding: const EdgeInsets.all(4),
-              minimumSize: const Size(24, 24),
+              ],
             ),
           ),
-        ),
-      ],
+          // Code content
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: SelectableText(
+              code,
+              style: TextStyle(fontFamily: _monoFont,
+                fontSize: 12.5,
+                color: cs.onSurface,
+                height: 1.5,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

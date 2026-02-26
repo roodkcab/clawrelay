@@ -1,0 +1,3 @@
+[submodule "clawrelay-api"]
+	path = clawrelay-api
+	url = https://github.com/roodkcab/clawrelay-api.git

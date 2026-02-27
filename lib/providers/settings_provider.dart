@@ -29,3 +29,7 @@ final claudeApiProvider = Provider<ClaudeApi>((ref) {
 final themeModeProvider = StateProvider<ThemeMode>((ref) {
   return ref.read(settingsServiceProvider).themeMode;
 });
+
+final maxTurnsProvider = StateProvider<int>((ref) {
+  return ref.read(settingsServiceProvider).maxTurns;
+});

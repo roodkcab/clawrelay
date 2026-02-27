@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/settings_provider.dart';
+import '../services/settings_service.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -13,6 +14,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late final TextEditingController _urlController;
   late final TextEditingController _modelController;
+  late final TextEditingController _maxTurnsController;
 
   @override
   void initState() {
@@ -20,12 +22,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final settings = ref.read(settingsServiceProvider);
     _urlController = TextEditingController(text: settings.serverUrl);
     _modelController = TextEditingController(text: settings.model);
+    _maxTurnsController = TextEditingController(text: settings.maxTurns.toString());
   }
 
   @override
   void dispose() {
     _urlController.dispose();
     _modelController.dispose();
+    _maxTurnsController.dispose();
     super.dispose();
   }
 
@@ -33,8 +37,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final settings = ref.read(settingsServiceProvider);
     await settings.setServerUrl(_urlController.text.trim());
     await settings.setDefaultModel(_modelController.text.trim());
+    final maxTurns = int.tryParse(_maxTurnsController.text.trim()) ?? SettingsService.defaultMaxTurns;
+    await settings.setMaxTurns(maxTurns);
     ref.read(serverUrlProvider.notifier).state = _urlController.text.trim();
     ref.read(defaultModelProvider.notifier).state = _modelController.text.trim();
+    ref.read(maxTurnsProvider.notifier).state = maxTurns;
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Settings saved')),
@@ -80,6 +87,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               labelText: 'Default Model',
               hintText: 'vllm/claude-sonnet-4-6',
               prefixIcon: Icon(Icons.smart_toy_outlined, size: 18),
+            ),
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: _maxTurnsController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Max Turns',
+              hintText: '200',
+              prefixIcon: Icon(Icons.repeat_rounded, size: 18),
+              helperText: 'Maximum tool-use turns per response (default: 200)',
             ),
           ),
 

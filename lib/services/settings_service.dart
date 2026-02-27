@@ -5,6 +5,9 @@ class SettingsService {
   static const _keyServerUrl = 'server_url';
   static const _keyDefaultModel = 'default_model';
   static const _keyThemeMode = 'theme_mode';
+  static const _keyMaxTurns = 'max_turns';
+
+  static const defaultMaxTurns = 200;
 
   static const defaultServerUrl = 'http://localhost:50009';
   static const defaultModel = 'vllm/claude-sonnet-4-6';
@@ -32,4 +35,8 @@ class SettingsService {
 
   Future<void> setThemeMode(ThemeMode mode) =>
       _prefs.setString(_keyThemeMode, mode.name);
+
+  int get maxTurns => _prefs.getInt(_keyMaxTurns) ?? defaultMaxTurns;
+
+  Future<void> setMaxTurns(int value) => _prefs.setInt(_keyMaxTurns, value);
 }

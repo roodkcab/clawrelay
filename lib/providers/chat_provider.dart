@@ -141,10 +141,12 @@ class ChatNotifier extends FamilyAsyncNotifier<ChatState, int> {
       apiMessages.add(ChatMessage(role: m.role, content: textContent, images: imgs));
     }
 
+    final maxTurns = ref.read(maxTurnsProvider);
     final request = ChatCompletionRequest(
       model: project.model,
       messages: apiMessages,
       workingDir: project.workingDirectory.isNotEmpty ? project.workingDirectory : null,
+      maxTurns: maxTurns,
     );
 
     final api = ref.read(claudeApiProvider);

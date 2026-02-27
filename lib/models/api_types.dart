@@ -62,6 +62,7 @@ class ChatCompletionRequest {
   final double? temperature;
   final int? maxTokens;
   final String? workingDir;
+  final int? maxTurns;
 
   const ChatCompletionRequest({
     required this.model,
@@ -70,6 +71,7 @@ class ChatCompletionRequest {
     this.temperature,
     this.maxTokens,
     this.workingDir,
+    this.maxTurns,
   });
 
   Map<String, dynamic> toJson() => {
@@ -79,6 +81,7 @@ class ChatCompletionRequest {
         if (temperature != null) 'temperature': temperature,
         if (maxTokens != null) 'max_tokens': maxTokens,
         if (workingDir != null && workingDir!.isNotEmpty) 'working_dir': workingDir,
+        if (maxTurns != null) 'max_turns': maxTurns,
       };
 }
 

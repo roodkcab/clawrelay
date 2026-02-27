@@ -63,6 +63,8 @@ class ChatCompletionRequest {
   final int? maxTokens;
   final String? workingDir;
   final int? maxTurns;
+  final String? sessionId;
+  final Map<String, String>? envVars;
 
   const ChatCompletionRequest({
     required this.model,
@@ -72,6 +74,8 @@ class ChatCompletionRequest {
     this.maxTokens,
     this.workingDir,
     this.maxTurns,
+    this.sessionId,
+    this.envVars,
   });
 
   Map<String, dynamic> toJson() => {
@@ -82,6 +86,8 @@ class ChatCompletionRequest {
         if (maxTokens != null) 'max_tokens': maxTokens,
         if (workingDir != null && workingDir!.isNotEmpty) 'working_dir': workingDir,
         if (maxTurns != null) 'max_turns': maxTurns,
+        if (sessionId != null && sessionId!.isNotEmpty) 'session_id': sessionId,
+        if (envVars != null && envVars!.isNotEmpty) 'env_vars': envVars,
       };
 }
 

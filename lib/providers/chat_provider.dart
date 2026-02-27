@@ -100,51 +100,29 @@ class ChatNotifier extends FamilyAsyncNotifier<ChatState, int> {
       isStreaming: true,
     ));
 
-    // Build API request with full history for context
+    // Build API request — only send the current user message.
+    // Full conversation context is maintained by the Claude CLI session
+    // via --resume <session_id>; sending full history would cause duplicates.
     final project = await _db.getProject(_projectId);
-    final allMsgs = await _db.messagesForProject(_projectId);
-    final apiMessages = <ChatMessage>[];
+    final sessionId = await _db.ensureSessionId(_projectId);
+    await _db.touchProject(_projectId);
 
+    final apiMessages = <ChatMessage>[];
     if (project.systemPrompt.isNotEmpty) {
       apiMessages.add(ChatMessage(role: 'system', content: project.systemPrompt));
     }
-
-    for (final m in allMsgs) {
-      // Detect JSON-encoded multipart content (messages with images stored as JSON array)
-      String textContent = m.content;
-      List<ImageAttachment>? imgs;
-      try {
-        final decoded = jsonDecode(m.content);
-        if (decoded is List) {
-          textContent = decoded
-              .where((p) => (p as Map)['type'] == 'text')
-              .map<String>((p) => (p as Map)['text'] as String? ?? '')
-              .join('');
-          final imgList = <ImageAttachment>[];
-          for (final p in decoded) {
-            if ((p as Map)['type'] != 'image_url') continue;
-            final url = (p['image_url'] as Map?)?['url'] as String?;
-            if (url == null || !url.startsWith('data:')) continue;
-            final comma = url.indexOf(',');
-            if (comma < 0) continue;
-            final header = url.substring(5, comma);
-            final mimeEnd = header.indexOf(';');
-            final mimeType = mimeEnd >= 0 ? header.substring(0, mimeEnd) : 'image/png';
-            try {
-              final bytes = base64Decode(url.substring(comma + 1));
-              imgList.add(ImageAttachment(bytes: bytes, mimeType: mimeType));
-            } catch (_) {}
-          }
-          if (imgList.isNotEmpty) imgs = imgList;
-        }
-      } catch (_) {}
-      apiMessages.add(ChatMessage(role: m.role, content: textContent, images: imgs));
-    }
+    // Current user message with optional images
+    apiMessages.add(ChatMessage(
+      role: 'user',
+      content: text,
+      images: images.isEmpty ? null : images,
+    ));
 
     final maxTurns = ref.read(maxTurnsProvider);
     final request = ChatCompletionRequest(
       model: project.model,
       messages: apiMessages,
+      sessionId: sessionId,
       workingDir: project.workingDirectory.isNotEmpty ? project.workingDirectory : null,
       maxTurns: maxTurns,
     );

@@ -388,6 +388,15 @@ class _CodeBlockBuilder extends MarkdownElementBuilder {
 
   _CodeBlockBuilder({required this.colorScheme, required this.theme});
 
+  // flutter_markdown bug workaround: when a custom `pre` builder returns null
+  // from visitText, the builder leaves a stale InlineElement in _inlines that
+  // never gets flushed, triggering `assert(_inlines.isEmpty)` when the document
+  // ends with a code block.  Returning a zero-size widget makes _inlines
+  // non-empty so _addAnonymousBlockIfNeeded properly clears the stale entry.
+  @override
+  Widget? visitText(md.Text text, TextStyle? preferredStyle) =>
+      const SizedBox.shrink();
+
   @override
   Widget? visitElementAfterWithContext(
     BuildContext context,

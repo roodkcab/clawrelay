@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
@@ -7,6 +8,15 @@ import 'package:path/path.dart' as p;
 
 part 'database.g.dart';
 
+String _generateUuid() {
+  final rng = Random.secure();
+  final bytes = List<int>.generate(16, (_) => rng.nextInt(256));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
+  bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant RFC 4122
+  final h = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  return '${h.substring(0, 8)}-${h.substring(8, 12)}-${h.substring(12, 16)}-${h.substring(16, 20)}-${h.substring(20)}';
+}
+
 class Projects extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get name => text()();
@@ -14,6 +24,7 @@ class Projects extends Table {
   TextColumn get systemPrompt => text().withDefault(const Constant(''))();
   TextColumn get model =>
       text().withDefault(const Constant('vllm/claude-sonnet-4-6'))();
+  TextColumn get sessionId => text().withDefault(const Constant(''))();
   DateTimeColumn get createdAt =>
       dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt =>
@@ -45,7 +56,17 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+        onCreate: (m) => m.createAll(),
+        onUpgrade: (m, from, to) async {
+          if (from < 2) {
+            await m.addColumn(projects, projects.sessionId);
+          }
+        },
+      );
 
   // -- Projects CRUD --
 
@@ -68,6 +89,20 @@ class AppDatabase extends _$AppDatabase {
 
   Future<int> deleteProject(int id) =>
       (delete(projects)..where((t) => t.id.equals(id))).go();
+
+  /// Returns the project's session UUID, generating and persisting one if empty.
+  Future<String> ensureSessionId(int projectId) async {
+    final project = await getProject(projectId);
+    if (project.sessionId.isNotEmpty) return project.sessionId;
+    final uuid = _generateUuid();
+    await (update(projects)..where((t) => t.id.equals(projectId)))
+        .write(ProjectsCompanion(sessionId: Value(uuid)));
+    return uuid;
+  }
+
+  Future<void> touchProject(int projectId) =>
+      (update(projects)..where((t) => t.id.equals(projectId)))
+          .write(ProjectsCompanion(updatedAt: Value(DateTime.now())));
 
   // -- Messages CRUD --
 

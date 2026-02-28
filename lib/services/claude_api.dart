@@ -84,10 +84,29 @@ class ClaudeApi {
                     final tcMap = tc as Map<String, dynamic>?;
                     if (tcMap == null) continue;
                     final id = tcMap['id'] as String?;
-                    final name =
-                        (tcMap['function'] as Map<String, dynamic>?)?['name']
-                            as String?;
+                    final funcMap = tcMap['function'] as Map<String, dynamic>?;
+                    final name = funcMap?['name'] as String?;
+                    final args = funcMap?['arguments'] as String?;
                     debugPrint('[SSE] tool id=$id name=$name');
+
+                    // Handle AskUserQuestion specially
+                    if (name == 'AskUserQuestion' && args != null && args.isNotEmpty) {
+                      debugPrint('[SSE] AskUserQuestion detected, parsing args');
+                      try {
+                        final argsJson = jsonDecode(args) as Map<String, dynamic>;
+                        final questions = (argsJson['questions'] as List?)
+                                ?.map((q) => AskUserQuestion.fromJson(q as Map<String, dynamic>))
+                                .toList() ??
+                            [];
+                        if (questions.isNotEmpty) {
+                          yield AskUserQuestionEvent(questions);
+                        }
+                      } catch (e) {
+                        debugPrint('[SSE] Failed to parse AskUserQuestion args: $e');
+                      }
+                      continue;
+                    }
+
                     if (name != null && name.isNotEmpty) {
                       final key = id ?? name;
                       if (seenToolIds.add(key)) {

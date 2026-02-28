@@ -29,6 +29,48 @@ class ThinkingDelta extends StreamEvent {
   ThinkingDelta(this.text);
 }
 
+/// Emitted when Claude asks the user a question with options.
+class AskUserQuestionEvent extends StreamEvent {
+  final List<AskUserQuestion> questions;
+  AskUserQuestionEvent(this.questions);
+}
+
+class AskUserQuestion {
+  final String question;
+  final List<AskUserOption> options;
+  final bool multiSelect;
+
+  const AskUserQuestion({
+    required this.question,
+    required this.options,
+    this.multiSelect = false,
+  });
+
+  factory AskUserQuestion.fromJson(Map<String, dynamic> json) {
+    final opts = (json['options'] as List?)
+            ?.map((o) => AskUserOption.fromJson(o as Map<String, dynamic>))
+            .toList() ??
+        [];
+    return AskUserQuestion(
+      question: json['question'] as String? ?? '',
+      options: opts,
+      multiSelect: json['multiSelect'] as bool? ?? false,
+    );
+  }
+}
+
+class AskUserOption {
+  final String label;
+  final String description;
+
+  const AskUserOption({required this.label, this.description = ''});
+
+  factory AskUserOption.fromJson(Map<String, dynamic> json) => AskUserOption(
+        label: json['label'] as String? ?? '',
+        description: json['description'] as String? ?? '',
+      );
+}
+
 class ChatMessage {
   final String role;
   final String content;

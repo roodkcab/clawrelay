@@ -17,6 +17,8 @@ class ChatState {
   final List<String> streamingToolCalls;
   final String streamingThinking;
   final String? error;
+  /// Non-null when Claude asks the user a question and awaits an answer.
+  final List<AskUserQuestion>? pendingQuestions;
 
   const ChatState({
     this.messages = const [],
@@ -25,6 +27,7 @@ class ChatState {
     this.streamingToolCalls = const [],
     this.streamingThinking = '',
     this.error,
+    this.pendingQuestions,
   });
 
   ChatState copyWith({
@@ -34,6 +37,8 @@ class ChatState {
     List<String>? streamingToolCalls,
     String? streamingThinking,
     String? error,
+    List<AskUserQuestion>? pendingQuestions,
+    bool clearPendingQuestions = false,
   }) =>
       ChatState(
         messages: messages ?? this.messages,
@@ -42,6 +47,7 @@ class ChatState {
         streamingToolCalls: streamingToolCalls ?? this.streamingToolCalls,
         streamingThinking: streamingThinking ?? this.streamingThinking,
         error: error,
+        pendingQuestions: clearPendingQuestions ? null : (pendingQuestions ?? this.pendingQuestions),
       );
 }
 
@@ -153,6 +159,12 @@ class ChatNotifier extends FamilyAsyncNotifier<ChatState, int> {
             debugPrint('[PROVIDER] ThinkingDelta len=${event.text.length}');
             thinkingAccumulated += event.text;
             state = AsyncValue.data(s.copyWith(streamingThinking: thinkingAccumulated));
+          } else if (event is AskUserQuestionEvent) {
+            debugPrint('[PROVIDER] AskUserQuestion: ${event.questions.length} questions');
+            state = AsyncValue.data(s.copyWith(
+              pendingQuestions: event.questions,
+              isStreaming: false,
+            ));
           }
         },
         onDone: () async {
@@ -175,9 +187,13 @@ class ChatNotifier extends FamilyAsyncNotifier<ChatState, int> {
             );
             state = AsyncValue.data(ChatState(
               messages: [...s.messages, assistantMsg],
+              pendingQuestions: s.pendingQuestions,
             ));
           } else {
-            state = AsyncValue.data(ChatState(messages: s.messages));
+            state = AsyncValue.data(ChatState(
+              messages: s.messages,
+              pendingQuestions: s.pendingQuestions,
+            ));
           }
           // Mark as unread if this project is not the currently focused one
           final selectedId = ref.read(selectedProjectIdProvider);
@@ -230,6 +246,128 @@ class ChatNotifier extends FamilyAsyncNotifier<ChatState, int> {
     final s = state.valueOrNull;
     if (s != null) {
       state = AsyncValue.data(s.copyWith(isStreaming: false, streamingText: ''));
+    }
+  }
+
+  /// Answer a pending AskUserQuestion and resume the Claude session.
+  Future<void> answerQuestion(String answer) async {
+    final currentState = state.valueOrNull;
+    if (currentState == null) return;
+
+    // Save any accumulated text as an assistant message before resuming
+    // (the stream may have sent partial text before the question)
+
+    // Clear pending question and mark as streaming
+    state = AsyncValue.data(currentState.copyWith(
+      clearPendingQuestions: true,
+      isStreaming: true,
+      streamingText: '',
+      streamingToolCalls: const [],
+      streamingThinking: '',
+    ));
+
+    final project = await _db.getProject(_projectId);
+    final sessionId = await _db.ensureSessionId(_projectId);
+
+    final request = ChatCompletionRequest(
+      model: project.model,
+      messages: [ChatMessage(role: 'user', content: answer)],
+      sessionId: sessionId,
+      workingDir: project.workingDirectory.isNotEmpty ? project.workingDirectory : null,
+      maxTurns: ref.read(maxTurnsProvider),
+    );
+
+    final api = ref.read(claudeApiProvider);
+    var accumulated = '';
+    final toolCalls = <String>[];
+    var thinkingAccumulated = '';
+
+    try {
+      final stream = api.streamChat(request);
+      _streamSub = stream.listen(
+        (event) {
+          final s = state.valueOrNull;
+          if (s == null) return;
+          if (event is TextDelta) {
+            accumulated += event.text;
+            state = AsyncValue.data(s.copyWith(streamingText: accumulated));
+          } else if (event is ToolUseStart) {
+            if (!toolCalls.contains(event.name)) {
+              toolCalls.add(event.name);
+            }
+            state = AsyncValue.data(
+                s.copyWith(streamingToolCalls: List.unmodifiable(toolCalls)));
+          } else if (event is ThinkingDelta) {
+            thinkingAccumulated += event.text;
+            state = AsyncValue.data(s.copyWith(streamingThinking: thinkingAccumulated));
+          } else if (event is AskUserQuestionEvent) {
+            state = AsyncValue.data(s.copyWith(
+              pendingQuestions: event.questions,
+              isStreaming: false,
+            ));
+          }
+        },
+        onDone: () async {
+          final s = state.valueOrNull ?? const ChatState();
+          if (accumulated.isNotEmpty) {
+            final insertedId = await _db.insertMessage(MessagesCompanion.insert(
+              projectId: _projectId,
+              role: 'assistant',
+              content: accumulated,
+            ));
+            final assistantMsg = Message(
+              id: insertedId,
+              projectId: _projectId,
+              role: 'assistant',
+              content: accumulated,
+              createdAt: DateTime.now(),
+            );
+            state = AsyncValue.data(ChatState(
+              messages: [...s.messages, assistantMsg],
+            ));
+          } else {
+            state = AsyncValue.data(ChatState(messages: s.messages));
+          }
+          final selectedId = ref.read(selectedProjectIdProvider);
+          if (selectedId != _projectId) {
+            final unread = ref.read(unreadProjectIdsProvider);
+            ref.read(unreadProjectIdsProvider.notifier).state = {...unread, _projectId};
+          }
+        },
+        onError: (error) async {
+          final s = state.valueOrNull ?? const ChatState();
+          if (accumulated.isNotEmpty) {
+            final insertedId = await _db.insertMessage(MessagesCompanion.insert(
+              projectId: _projectId,
+              role: 'assistant',
+              content: accumulated,
+            ));
+            final assistantMsg = Message(
+              id: insertedId,
+              projectId: _projectId,
+              role: 'assistant',
+              content: accumulated,
+              createdAt: DateTime.now(),
+            );
+            state = AsyncValue.data(ChatState(
+              messages: [...s.messages, assistantMsg],
+              error: error.toString(),
+            ));
+          } else {
+            state = AsyncValue.data(ChatState(
+              messages: s.messages,
+              error: error.toString(),
+            ));
+          }
+        },
+        cancelOnError: true,
+      );
+    } catch (e) {
+      final s = state.valueOrNull ?? const ChatState();
+      state = AsyncValue.data(ChatState(
+        messages: s.messages,
+        error: e.toString(),
+      ));
     }
   }
 

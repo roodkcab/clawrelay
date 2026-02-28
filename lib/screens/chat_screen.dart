@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../database/database.dart';
+import '../models/api_types.dart';
 import '../providers/chat_provider.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/chat_input.dart';
@@ -214,8 +215,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   ],
                 ),
               ),
+            if (chatState.pendingQuestions != null &&
+                chatState.pendingQuestions!.isNotEmpty)
+              _AskUserQuestionPanel(
+                questions: chatState.pendingQuestions!,
+                onAnswer: (answer) {
+                  ref
+                      .read(chatProvider(widget.project.id).notifier)
+                      .answerQuestion(answer);
+                },
+              ),
             ChatInput(
-              enabled: !chatState.isStreaming,
+              enabled: !chatState.isStreaming &&
+                  (chatState.pendingQuestions == null ||
+                      chatState.pendingQuestions!.isEmpty),
               isStreaming: chatState.isStreaming,
               onStop: () => ref
                   .read(chatProvider(widget.project.id).notifier)
@@ -228,6 +241,150 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _AskUserQuestionPanel extends StatefulWidget {
+  final List<AskUserQuestion> questions;
+  final ValueChanged<String> onAnswer;
+
+  const _AskUserQuestionPanel({
+    required this.questions,
+    required this.onAnswer,
+  });
+
+  @override
+  State<_AskUserQuestionPanel> createState() => _AskUserQuestionPanelState();
+}
+
+class _AskUserQuestionPanelState extends State<_AskUserQuestionPanel> {
+  final _customController = TextEditingController();
+
+  @override
+  void dispose() {
+    _customController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: cs.primaryContainer.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: cs.primary.withValues(alpha: 0.25),
+          width: 0.5,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final q in widget.questions) ...[
+            Row(
+              children: [
+                Icon(Icons.help_outline_rounded, size: 16, color: cs.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    q.question,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: cs.onSurface,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                for (final opt in q.options)
+                  Tooltip(
+                    message: opt.description,
+                    waitDuration: const Duration(milliseconds: 400),
+                    child: OutlinedButton(
+                      onPressed: () => widget.onAnswer(opt.label),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        minimumSize: Size.zero,
+                        side: BorderSide(
+                          color: cs.outline.withValues(alpha: 0.4),
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: Text(
+                        opt.label,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: cs.onSurface,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+          ],
+          // Free text input for custom answer
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _customController,
+                  style: theme.textTheme.bodySmall,
+                  decoration: InputDecoration(
+                    hintText: 'Or type a custom answer...',
+                    hintStyle: theme.textTheme.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant.withValues(alpha: 0.5),
+                    ),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 8),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(
+                        color: cs.outline.withValues(alpha: 0.3),
+                      ),
+                    ),
+                  ),
+                  onSubmitted: (text) {
+                    if (text.trim().isNotEmpty) {
+                      widget.onAnswer(text.trim());
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: Icon(Icons.send_rounded, size: 18, color: cs.primary),
+                onPressed: () {
+                  final text = _customController.text.trim();
+                  if (text.isNotEmpty) {
+                    widget.onAnswer(text);
+                  }
+                },
+                style: IconButton.styleFrom(
+                  padding: const EdgeInsets.all(8),
+                  minimumSize: const Size(36, 36),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
